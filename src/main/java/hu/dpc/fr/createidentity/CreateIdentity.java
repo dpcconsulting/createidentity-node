@@ -50,6 +50,8 @@ public class CreateIdentity extends SingleOutcomeNode {
     private final Logger logger = LoggerFactory.getLogger(CreateIdentity.class);
     private final Config config;
     private final Realm realm;
+    private final static String HU_DPC_BX_sn = "bx-sn";
+    private final static String HU_DPC_BX_givenName = "bx-givenName";
 
     /**
      * Configuration for the node.
@@ -76,32 +78,37 @@ public class CreateIdentity extends SingleOutcomeNode {
     @Override
     public Action process(TreeContext context) throws NodeProcessException {
 
-     //   logger.info("CREATEIDENTITY: shouldn't be USERNAME in shared state: "
-       //         + context.getStateFor(this).get(USERNAME).toString());
+        if (context.getStateFor(this).get(USERNAME) != null) {
+            logger.warn("CREATEIDENTITY: there's already a USERNAME in shared state. will be overwritten");
+        }
 
         String userId = UUID.randomUUID().toString();
         Map<String, Set<String>> userAttributes = new HashMap<>();
         userAttributes.put("_id", Collections.singleton(userId));
         userAttributes.put("username", Collections.singleton(userId));
         userAttributes.put("userpassword", Collections.singleton(userId)); // TODO WARNING REMOVE THIS
+
+        if (context.getStateFor(this).get(HU_DPC_BX_sn) != null) {
+            logger.info("CREATEIDENTITY: sn found in shared state, adding to user");
+            userAttributes.put("sn", Collections.singleton(context.getStateFor(this).get(HU_DPC_BX_sn).asString()));
+        }
+        if (context.getStateFor(this).get(HU_DPC_BX_givenName) != null) {
+            logger.info("CREATEIDENTITY: givenName found in shared state, adding to user");
+            userAttributes.put("givenName", Collections.singleton(context.getStateFor(this).get(HU_DPC_BX_givenName).asString()));
+        }
+
         logger.info("CREATEIDENTITY: userAttributes: " + userAttributes);
-
-
-        //        "givenname": "Sam",
-          //      "sn": "Carter",
-            //    "userpassword": "Password-1!"
-
 
         try {
             AMIdentityRepository idRepo = getIdRepo(realm);
             AMIdentity userIdentity = idRepo.createIdentity(IdType.USER, userId, userAttributes);
-            logger.info("CREATEIDENTITY: userIdentity: " + userIdentity);
+            logger.info("CREATEIDENTITY: userIdentity created in repo: " + userIdentity);
         } catch (IdRepoException|SSOException e) {
             logger.error("CREATEIDENTITY: " + e.getMessage(), e);
             throw new NodeProcessException(e);
         }
         context.getStateFor(this).putShared(USERNAME, userId);
-        logger.info("CREATEIDENTITY: check USERNAME in shared state: " + context.getStateFor(this).get(USERNAME).toString());
+        logger.info("CREATEIDENTITY: added USERNAME in shared state: " + context.getStateFor(this).get(USERNAME).toString());
 
         return goToNext().build();
     }
